@@ -96,7 +96,6 @@ func (m *MailboxOperator) workers(reader <-chan mailBytesId) <-chan error {
 				if err != nil {
 					thisErr := OperationError{mbi.m.Kind, mbi.m.Path, mbi.m.No, err}
 					workerErrChan <- thisErr
-					close(workerErrChan)
 					return thisErr
 				}
 			}
@@ -105,6 +104,7 @@ func (m *MailboxOperator) workers(reader <-chan mailBytesId) <-chan error {
 	}
 	go func() {
 		workerErrChan <- g.Wait()
+		close(workerErrChan)
 	}()
 	return workerErrChan
 }
