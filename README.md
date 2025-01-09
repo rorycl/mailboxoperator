@@ -1,6 +1,6 @@
 # mailboxoperator
 
-version 0.0.1 : 09 January 2025
+version 0.0.2 : 09 January 2025
 
 MailboxOperator is a golang package for reading the emails in mbox and
 maildir format mailboxes and passing each email to a func meeting the
@@ -19,8 +19,8 @@ patches or suggestions.
 
 ## Example
 
-```
-package main
+```golang
+package mailboxoperator
 
 import (
 	"fmt"
@@ -28,8 +28,6 @@ import (
 	"log"
 	"net/mail"
 	"sync"
-
-	mbo "github.com/rorycl/mailboxoperator"
 )
 
 type Counter struct {
@@ -37,6 +35,7 @@ type Counter struct {
 	sync.Mutex
 }
 
+// Operate must be concurrent safe
 func (c *Counter) Operate(r io.Reader) error {
 	_, err := mail.ReadMessage(r)
 	if err != nil {
@@ -48,12 +47,13 @@ func (c *Counter) Operate(r io.Reader) error {
 	return nil
 }
 
-func main() {
+func Example() {
 	c := Counter{}
-	maildirs := []string{"maildir/testdata/example/"}
-	mboxes := []string{"mbox/testdata/golang.mbox.bz2", "mbox/testdata/gonuts.mbox"}
 
-	mo, err := mbo.NewMailboxOperator(mboxes, maildirs, &c)
+	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
+	maildirs := []string{"maildir/testdata/example/"}
+
+	mo, err := NewMailboxOperator(mboxes, maildirs, &c)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,5 +62,6 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Println(c.num)
+	// Output: 9
 }
 ```
