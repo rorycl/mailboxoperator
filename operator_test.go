@@ -87,8 +87,8 @@ func TestProcessSimpleErr(t *testing.T) {
 		t.Errorf("OperationError err descriptor got %s want %s", got, want)
 	}
 
-	if got, want := err.Error(), `maildir path maildir/testdata/example/cur/1735238277.2023287_9.example:2,S offset 3 error: charset not supported: "koi8-r"`; got != want {
-		t.Errorf("Error string got %s want %s", got, want)
+	if got, want := err.Error(), `maildir path maildir/testdata/example/cur/1735238277.2023287_9.example_2_s offset 3 error: charset not supported: "koi8-r"`; got != want {
+		t.Errorf("Error string\ngot  %s\nwant %s", got, want)
 	}
 	// fmt.Printf("%#v\n", errReturned)
 }
