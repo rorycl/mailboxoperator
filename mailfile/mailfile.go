@@ -1,3 +1,4 @@
+// package mailfile provides shared information about a mail file.
 package mailfile
 
 // MailFile represents a Mail file on disk and location of an email

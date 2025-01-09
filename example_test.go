@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/mail"
 	"sync"
+
+	mbo "github.com/rorycl/mailboxoperator"
 )
 
 // counter is a simple struct with mutex protected int
@@ -37,7 +39,7 @@ func Example() {
 	maildirs := []string{"maildir/testdata/example/"}
 
 	// init operator with mailboxes and counter
-	mo, err := NewMailboxOperator(mboxes, maildirs, &c)
+	mo, err := mbo.NewMailboxOperator(mboxes, maildirs, &c)
 	if err != nil {
 		log.Fatal(err)
 	}
