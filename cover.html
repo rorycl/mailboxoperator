@@ -1,0 +1,657 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>maildir: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/rorycl/mailboxoperator/maildir/maildir.go (92.3%)</option>
+				
+				<option value="file1">github.com/rorycl/mailboxoperator/mbox/mbox.go (95.0%)</option>
+				
+				<option value="file2">github.com/rorycl/mailboxoperator/mbox/writer.go (85.0%)</option>
+				
+				<option value="file3">github.com/rorycl/mailboxoperator/operator.go (91.0%)</option>
+				
+				<option value="file4">github.com/rorycl/mailboxoperator/uncompress/uncompress.go (92.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// package maildir provides a very simple way of accessing the emails in an
+// email Maildir.
+//
+// for example:
+//
+//        md, _ := NewMailDir("openssh")
+//        _ = md.List()
+//        for _, m := range md.Contents {
+//                fmt.Println(m)
+//        }
+//        for {
+//                m, r, err := md.NextReader()
+//                if err != nil &amp;&amp; err == io.EOF {
+//                        break
+//                }
+//                fmt.Println(m.Path)
+//           // do something with the io.Reader in r
+//        }
+package maildir
+
+import (
+        "errors"
+        "fmt"
+        "io"
+        "io/fs"
+        "os"
+        "path/filepath"
+
+        "github.com/rorycl/mailboxoperator/mailfile"
+)
+
+// mailDirContents are the normal subdirectory names of an enclosing
+// maildir; see https://en.wikipedia.org/wiki/Maildir#Specifications
+var mailDirContents []string = []string{"cur", "new", "tmp"}
+
+// EmptyMailDir is a sentinel error
+var EmptyMailDir error = errors.New("maildir is empty")
+
+// Maildir represents the outer directory of a set of maildir
+// subdirectories (expected to be mailDirContents) and a listing of the
+// Mail items (if any) in each subdirectory.
+type MailDir struct {
+        Path     string
+        Contents []*mailfile.MailFile
+        stats    map[string]int
+        current  int // current message being read
+}
+
+// NewMailDir sets up a mail directory for listing the contents.
+func NewMailDir(path string) (*MailDir, error) <span class="cov8" title="1">{
+        m := MailDir{}
+        _, err := os.Stat(path)
+        if errors.Is(err, fs.ErrNotExist) </span><span class="cov0" title="0">{
+                return &amp;m, err
+        }</span>
+        <span class="cov8" title="1">m.Path = path
+        m.stats = map[string]int{}
+        m.current = -1
+        err = m.list()
+        if m.TotalEmails() == 0 </span><span class="cov8" title="1">{
+                return &amp;m, EmptyMailDir
+        }</span>
+        <span class="cov8" title="1">return &amp;m, err</span>
+}
+
+// list lists all of the contents of the mail directory's
+// subdirectories.
+func (m *MailDir) list() error <span class="cov8" title="1">{
+        for _, md := range mailDirContents </span><span class="cov8" title="1">{
+                dirPathForGlob := filepath.Join(m.Path, md, "*")
+                contents, err := filepath.Glob(dirPathForGlob)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if len(contents) == 0 </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">m.stats[md] = len(contents)
+                for i, c := range contents </span><span class="cov8" title="1">{
+                        mail := &amp;mailfile.MailFile{
+                                Kind: "maildir",
+                                Path: filepath.Join(c),
+                                No:   i,
+                        }
+                        m.Contents = append(m.Contents, mail)
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+// TotalEmails provides a total of all mails in all Maildir subdirectories
+func (m *MailDir) TotalEmails() int <span class="cov8" title="1">{
+        n := 0
+        for _, v := range m.stats </span><span class="cov8" title="1">{
+                n += v
+        }</span>
+        <span class="cov8" title="1">return n</span>
+}
+
+// Next returns the next Mail in MailDir.contents or io.EOF when
+// the contents are exhausted.
+func (m *MailDir) Next() (*mailfile.MailFile, error) <span class="cov8" title="1">{
+        m.current++
+        if m.current &gt; len(m.Contents)-1 </span><span class="cov8" title="1">{
+                return nil, io.EOF
+        }</span>
+        <span class="cov8" title="1">return m.Contents[m.current], nil</span>
+}
+
+// NextReader returns the next Mail in MailDir.contents as  Mail
+// metadata and io.Reader unless the contents are exhausted.
+func (m *MailDir) NextReader() (*mailfile.MailFile, io.Reader, error) <span class="cov8" title="1">{
+        m.current++
+        if m.current &gt; len(m.Contents)-1 </span><span class="cov8" title="1">{
+                return nil, nil, io.EOF
+        }</span>
+        <span class="cov8" title="1">f, err := os.Open(m.Contents[m.current].Path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, nil, fmt.Errorf("file opening error %w", err)
+        }</span>
+        <span class="cov8" title="1">return m.Contents[m.current], io.Reader(f), nil</span>
+}
+
+// Reset sets the MailDir internal pointer back to -1 to re-read the
+// contents of the directories for Next() or NextReader().
+func (m *MailDir) Reset() <span class="cov8" title="1">{
+        m.current = -1
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package mbox
+
+import (
+        "errors"
+        "fmt"
+        "io"
+        "os"
+
+        "github.com/rorycl/mailboxoperator/mailfile"
+        "github.com/rorycl/mailboxoperator/uncompress"
+
+        mbox "github.com/ProtonMail/go-mbox"
+)
+
+// Mbox represents an mbox file on disk with related go-mbox reader and
+// email position in the mbox file.
+type Mbox struct {
+        Path    string
+        current int // current message being read
+        file    *os.File
+        reader  *mbox.Reader
+}
+
+// NewMbox sets up a new mbox for reading
+func NewMbox(path string) (*Mbox, error) <span class="cov8" title="1">{
+        m := Mbox{}
+        var err error
+        m.file, err = os.Open(path)
+        if err != nil </span><span class="cov8" title="1">{
+                return &amp;m, err
+        }</span>
+        <span class="cov8" title="1">m.Path = path
+        m.current = -1
+
+        // transparent decompression of bzip2, xz and gzip files
+        u, err := uncompress.NewReader(m.file)
+        if err != nil &amp;&amp; errors.Is(err, io.EOF) </span><span class="cov8" title="1">{
+                return &amp;m, fmt.Errorf("%s is an empty mailbox: %w", path, err)
+        }</span>
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                return &amp;m, fmt.Errorf("uncompress error: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">m.reader = mbox.NewReader(u)
+        return &amp;m, err</span>
+}
+
+// NextReader returns the next Mail from the reader until exhausted
+func (m *Mbox) NextReader() (*mailfile.MailFile, io.Reader, error) <span class="cov8" title="1">{
+        m.current++
+        thisMail := mailfile.MailFile{
+                Kind: "mbox",
+                Path: m.Path,
+                No:   m.current,
+        }
+        reader, err := m.reader.NextMessage()
+        if err != nil &amp;&amp; err == io.EOF </span><span class="cov8" title="1">{
+                m.file.Close()
+        }</span>
+        <span class="cov8" title="1">return &amp;thisMail, reader, err</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package mbox
+
+import (
+        "errors"
+        "fmt"
+        "io"
+        "io/fs"
+        "os"
+        "sync"
+        "time"
+
+        protonMbox "github.com/ProtonMail/go-mbox"
+)
+
+// MboxWriter wraps a protonMbox.Writer
+type MboxWriter struct {
+        Writer *protonMbox.Writer
+        ids    map[string]struct{}
+        sync.Mutex
+}
+
+// NewMboxWriter wraps a proton mbox writer with some file checking
+func NewMboxWriter(path string) (*MboxWriter, error) <span class="cov8" title="1">{
+        if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("file %s already exists", path)
+        }</span>
+        <span class="cov8" title="1">f, err := os.Create(path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">m := &amp;MboxWriter{
+                Writer: protonMbox.NewWriter(f),
+                ids:    map[string]struct{}{},
+        }
+        return m, nil</span>
+}
+
+// Add creates an mbox entry with the email From, Date and messageId and
+// contents (as an io.Reader). See protonMbox.CreateMessage for more
+// detail. Messages with ids that have already been written are not
+// written again. Add returns a bool indicating if the message was
+// written or error.
+func (m *MboxWriter) Add(from string, date time.Time, messageId string, r io.Reader) (bool, error) <span class="cov8" title="1">{
+        m.Lock()
+        defer m.Unlock()
+        if _, ok := m.ids[messageId]; ok </span><span class="cov8" title="1">{
+                return false, nil
+        }</span>
+        <span class="cov8" title="1">w, err := m.Writer.CreateMessage(from, date)
+        if err != nil </span><span class="cov0" title="0">{
+                return false, fmt.Errorf("mboxwriter create error: %w", err)
+        }</span>
+        <span class="cov8" title="1">_, err = io.Copy(w, r)
+        if err != nil </span><span class="cov0" title="0">{
+                return false, fmt.Errorf("mboxwriter write error: %w", err)
+        }</span>
+        <span class="cov8" title="1">m.ids[messageId] = struct{}{}
+        return true, nil</span>
+}
+
+// Close calls protonMbox.Close()
+func (m *MboxWriter) Close() error <span class="cov8" title="1">{
+        return m.Writer.Close()
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package mailboxoperator
+
+import (
+        "bytes"
+        "errors"
+        "fmt"
+        "io"
+
+        "github.com/rorycl/mailboxoperator/maildir"
+        "github.com/rorycl/mailboxoperator/mailfile"
+        "github.com/rorycl/mailboxoperator/mbox"
+        "golang.org/x/sync/errgroup"
+)
+
+// Operator is an interface for reading emails from mailboxes. Shared
+// resources used by the Operator should be concurrent safe. For
+// example, saving information to a shared struct should be mutex
+// protected.
+type Operator interface {
+        Operate(io.Reader) error
+}
+
+var (
+        // WorkersNum is the number of concurrent workers used to process
+        // `Operator`.
+        WorkersNum int = 8
+)
+
+// MailboxOperator is a struct setting out the mailboxes to be processed
+// with `Operator`.
+type MailboxOperator struct {
+        mboxes   []string
+        maildirs []string
+        operator Operator
+}
+
+// NewMailboxOperator creates a new MailboxOperator with the provided
+// one or more mbox format files or maildir directories.
+func NewMailboxOperator(mboxes []string, maildirs []string, operator Operator) (*MailboxOperator, error) <span class="cov8" title="1">{
+        if len(mboxes)+len(maildirs) &lt; 1 </span><span class="cov8" title="1">{
+                return nil, errors.New("no mailboxes or maildirs provided")
+        }</span>
+        <span class="cov8" title="1">if operator == nil </span><span class="cov8" title="1">{
+                return nil, errors.New("nil operator provided")
+        }</span>
+        <span class="cov8" title="1">return &amp;MailboxOperator{
+                mboxes:   mboxes,
+                maildirs: maildirs,
+                operator: operator,
+        }, nil</span>
+}
+
+// Operate performs operations on the emails in each mailbox, exiting
+// with an error after the first error, if any. Each mailbox is
+// processed concurrently and the `Operator` function run by
+// `WorkersNum` goroutines.
+func (m *MailboxOperator) Operate() error <span class="cov8" title="1">{
+        err := m.process()
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// OperationError is a decorated error describing the mbox/maildir file
+// path, file offset and error occurring from a call to Operate.
+type OperationError struct {
+        Kind   string // mbox or maildir
+        Path   string // path to mbox or maildir
+        Offset int    // email offset in mbox or maildir
+        Err    error
+}
+
+func (o OperationError) Error() string <span class="cov8" title="1">{
+        return fmt.Sprintf("%s path %s offset %d error: %s", o.Kind, o.Path, o.Offset, o.Err.Error())
+}</span>
+
+// mailBytesId passes mail data from the reader to the worker
+type mailBytesId struct {
+        m   *mailfile.MailFile
+        buf *bytes.Buffer
+        i   int // this email offset
+}
+
+// workers process mail on the reader chan with the Operator.
+func (m *MailboxOperator) workers(reader &lt;-chan mailBytesId) &lt;-chan error <span class="cov8" title="1">{
+
+        workerErrChan := make(chan error)
+        g := new(errgroup.Group)
+        for w := 0; w &lt; WorkersNum; w++ </span><span class="cov8" title="1">{
+                g.Go(func() error </span><span class="cov8" title="1">{
+                        for mbi := range reader </span><span class="cov8" title="1">{
+
+                                // run the operator
+                                err := m.operator.Operate(mbi.buf)
+                                if err != nil </span><span class="cov8" title="1">{
+                                        thisErr := OperationError{mbi.m.Kind, mbi.m.Path, mbi.m.No, err}
+                                        workerErrChan &lt;- thisErr
+                                        close(workerErrChan)
+                                        return thisErr
+                                }</span>
+                        }
+                        <span class="cov8" title="1">return nil</span>
+                })
+        }
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                workerErrChan &lt;- g.Wait()
+        }</span>()
+        <span class="cov8" title="1">return workerErrChan</span>
+}
+
+// process processes all mailboxes and maildirs in separate goroutines
+// for each feeding the emails to the workers func over the reader chan.
+func (m *MailboxOperator) process() error <span class="cov8" title="1">{
+
+        // readNextMail is a common interface for mbox, maildir reading
+        type readNextMail interface {
+                NextReader() (*mailfile.MailFile, io.Reader, error)
+        }
+
+        allMboxesAndMailDirs := []readNextMail{}
+        for _, m := range m.mboxes </span><span class="cov8" title="1">{
+                b, err := mbox.NewMbox(m)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("register mbox error: %w", err)
+                }</span>
+                <span class="cov8" title="1">allMboxesAndMailDirs = append(allMboxesAndMailDirs, b)</span>
+        }
+        <span class="cov8" title="1">for _, m := range m.maildirs </span><span class="cov8" title="1">{
+                b, err := maildir.NewMailDir(m)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("register maildir error: %w", err)
+                }</span>
+                <span class="cov8" title="1">allMboxesAndMailDirs = append(allMboxesAndMailDirs, b)</span>
+        }
+
+        // reader is a chan for sending emails to workers
+        <span class="cov8" title="1">reader := make(chan mailBytesId)
+
+        // initiate email operator workers
+        workerErrChan := m.workers(reader)
+
+        // Read each mbox/maildir in a separate goroutine, exiting on first
+        // error. Errors from workers are signalled on the workerErrChan,
+        // with the first worker error being reported after which the
+        // workerErrChan is closed, causing other produer goroutines to
+        // exit.
+        g := new(errgroup.Group)
+        for ii, mm := range allMboxesAndMailDirs </span><span class="cov8" title="1">{
+                g.Go(func() error </span><span class="cov8" title="1">{
+                        i := ii
+                        m := mm
+                        for </span><span class="cov8" title="1">{
+                                // check for error or closed worker chan, exiting in
+                                // either case
+                                select </span>{
+                                case err, ok := &lt;-workerErrChan:<span class="cov8" title="1">
+                                        if err != nil </span><span class="cov8" title="1">{
+                                                return err
+                                        }</span>
+                                        <span class="cov0" title="0">if !ok </span><span class="cov0" title="0">{
+                                                return nil
+                                        }</span>
+                                default:<span class="cov8" title="1"></span>
+                                }
+
+                                <span class="cov8" title="1">n, r, err := m.NextReader()
+                                if err != nil &amp;&amp; err == io.EOF </span><span class="cov8" title="1">{
+                                        break</span>
+                                }
+                                <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                                        return fmt.Errorf("read next mail error: %w", err)
+                                }</span>
+                                <span class="cov8" title="1">b := bytes.Buffer{}
+                                _, err = b.ReadFrom(r)
+                                if err != nil </span><span class="cov0" title="0">{
+                                        return fmt.Errorf("buffer error: %w", err)
+                                }</span>
+                                <span class="cov8" title="1">reader &lt;- mailBytesId{n, &amp;b, i}</span>
+                        }
+                        <span class="cov8" title="1">return nil</span>
+                })
+        }
+        <span class="cov8" title="1">err := g.Wait()
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">close(reader) // signal completion to workers
+
+        // wait for workers to complete, possibly with error, if not
+        // completed already
+        err = &lt;-workerErrChan
+        return err</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">// package uncompress tries to determine the file type of a file and
+// provides a reader to return an io.Reader wrapped by an uncompress
+// reader (such as a bzip2, xz or gzip reader) depending on the
+// MIME type determined by the file type check.
+package uncompress
+
+import (
+        "compress/bzip2"
+        "compress/gzip"
+        "io"
+        "os"
+
+        "github.com/h2non/filetype"
+        "github.com/ulikunitz/xz"
+)
+
+// uncompress is a struct representing the filename, extension and MIME
+// of a file
+type uncompress struct {
+        Extension string
+        MIME      string
+}
+
+// newUncompress returns a new uncompress type which attempts to
+// determing the file type.
+func newUncompress(f *os.File) (*uncompress, error) <span class="cov8" title="1">{
+        head := make([]byte, 261)
+        _, err := f.Read(head)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">kind, err := filetype.Match(head)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">u := &amp;uncompress{
+                Extension: kind.Extension,
+                MIME:      kind.MIME.Value,
+        }
+        _, err = f.Seek(0, 0)
+        return u, err</span>
+}
+
+// IsType reports if the file type is considered to be one of the
+// supplied types described by typer.
+func (u *uncompress) IsType(typer string) bool <span class="cov8" title="1">{
+        switch typer </span>{
+        case "bzip", "bzip2", "bz2", "application/x-bzip2":<span class="cov8" title="1">
+                return u.MIME == "application/x-bzip2"</span>
+        case "xz", "application/x-xz":<span class="cov8" title="1">
+                return u.MIME == "application/x-xz"</span>
+        case "gzip", "gz":<span class="cov8" title="1">
+                return u.MIME == "application/gzip"</span>
+        case "unknown":<span class="cov8" title="1">
+                return u.MIME == ""</span>
+        default:<span class="cov0" title="0">
+                return false</span>
+        }
+}
+
+// NewReader opens a file and attempts to determine its file type.
+// Depending on the file type, it will return an io.Reader wrapped by a
+// decompression reader.
+//
+// The decompressions type depends on the determined mime type. Note
+// that the bzip reader returns just:
+//
+//        io.Reader
+//
+// whereas others return:
+//
+//        io.Reader, error
+func NewReader(f *os.File) (io.Reader, error) <span class="cov8" title="1">{
+        u, err := newUncompress(f)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">r := io.Reader(f)
+
+        switch u.MIME </span>{
+        case "application/x-bzip2":<span class="cov8" title="1">
+                return bzip2.NewReader(r), nil</span>
+        case "application/x-xz":<span class="cov8" title="1">
+                return xz.NewReader(r)</span>
+        case "application/gzip":<span class="cov8" title="1">
+                return gzip.NewReader(r)</span>
+        }
+        <span class="cov8" title="1">return r, nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
