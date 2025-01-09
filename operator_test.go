@@ -29,6 +29,7 @@ func (c *counter) Operate(r io.Reader) error {
 
 func TestProcessSimple(t *testing.T) {
 	c := counter{}
+
 	maildirs := []string{"maildir/testdata/example/"}
 	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
 
@@ -36,10 +37,12 @@ func TestProcessSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = mo.Operate()
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got, want := c.num, 9; got != want {
 		t.Errorf("got %d want %d", got, want)
 	}
