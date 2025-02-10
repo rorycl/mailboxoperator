@@ -38,7 +38,7 @@ type Counter struct {
 
 // Operate fulfils the mailboxoperator.Operator interface requirement to
 // operate on an email. In this case it is using net/mail.ReadMessage,
-// but another useful module is github.com/mnako/letters. Mailboxes are
+// but another useful module is github.com/rorycl/letters. Mailboxes are
 // processed concurrently using NumWorkers worker goroutines.
 func (c *Counter) Operate(r io.Reader) error {
 	_, err := mail.ReadMessage(r)
