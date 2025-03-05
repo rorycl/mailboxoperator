@@ -28,10 +28,10 @@ func TestMailDir(t *testing.T) {
 	}
 
 	files := `
-testdata/example/cur/1735238277.2023287_11.example:2,S
-testdata/example/cur/1735238277.2023287_5.example:2,S
-testdata/example/cur/1735238277.2023287_7.example:2,S
-testdata/example/cur/1735238277.2023287_9.example:2,S
+testdata/example/cur/1735238277.2023287_11.example_2_s
+testdata/example/cur/1735238277.2023287_5.example_2_s
+testdata/example/cur/1735238277.2023287_7.example_2_s
+testdata/example/cur/1735238277.2023287_9.example_2_s
 testdata/example/new/1735238277.2023287_1.example
 testdata/example/new/1735238277.2023287_3.example
 `
