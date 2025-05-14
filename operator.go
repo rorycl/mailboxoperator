@@ -156,7 +156,9 @@ func (m *MailboxOperator) process() error {
 				select {
 				case err, ok := <-workerErrChan:
 					if err != nil {
-						return err
+						fmt.Println("error", err)
+						// return err
+						return nil
 					}
 					if !ok {
 						return nil

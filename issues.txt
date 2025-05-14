@@ -1,0 +1,40 @@
+List of issues
+==============
+
+Run failing tests due to issues:
+```
+go test -tags=failingTests .
+```
+
+1. incorrect mailbox parsing of "From" lines
+
+Some mailboxes do not escape lines starting "From" with a prefixed ">",
+which causes parsing errors. For example, the top email here as saved
+directly to an mbox from mutt:
+
+
+```
+From yror@example.net Tue May 13 23:13:55 2025
+Date: Tue, 13 May 2025 23:13:55 +0100
+From: Yror Egnal <yror@example.net>
+To: yror <yror@example.net>
+Subject: Test From
+Message-ID: <aCPEI5Vj5hVLA1bt@example.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Status: RO
+Content-Length: 31
+Lines: 5
+
+Hi There
+
+From all of us
+here.
+
+
+From openssh-unix-dev-bounces+yror=example.net@mindrot.org Wed Jun 24 14:59:25 2020
+Return-path: <openssh-unix-dev-bounces+yror=example.net@mindrot.org>
+Envelope-to: yror@example.net
+...
+```

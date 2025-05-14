@@ -1,0 +1,47 @@
+From yror@example.net Tue May 13 23:13:55 2025
+Date: Tue, 13 May 2025 23:13:55 +0100
+From: Yror Egnal <yror@example.net>
+To: yror <yror@example.net>
+Subject: Test From
+Message-ID: <aCPEI5Vj5hVLA1bt@example.net>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+Status: RO
+Content-Length: 31
+Lines: 5
+
+Hi There
+
+From all of us
+here
+
+
+From openssh-unix-dev-bounces+yror=example.net@mindrot.org Wed Jun 24 14:59:25 2020
+Return-path: <openssh-unix-dev-bounces+yror=example.net@mindrot.org>
+Envelope-to: yror@example.net
+Delivery-date: Wed, 24 Jun 2020 13:59:25 +0000
+Delivered-To: openssh-unix-dev@mindrot.org
+Date: Wed, 24 Jun 2020 14:52:58 +0100
+From: Yror Egnal <yror@example.net>
+To: Another User <xxxxxxx@gmail.com>
+Cc: openssh-unix-dev@mindrot.org
+Subject: Re: SSH certificate and serverside ForceCommand
+Message-ID: <20200624135258.GA18340@example.net>
+References: <CAAnV4jkFRLZT3o+x0mZzeZK4v8fHa8kWzV9Jhe+7sTNL-Ko_LQ@mail.gmail.com>
+MIME-Version: 1.0
+Content-Disposition: inline
+In-Reply-To: <CAAnV4jkFRLZT3o+x0mZzeZK4v8fHa8kWzV9Jhe+7sTNL-Ko_LQ@mail.gmail.com>
+User-Agent: Mutt/1.10.1 (2018-07-13)
+Content-Length: 742
+
+On 23/06/20, A User (xxxxxxx@gmail.com) wrote:
+> As a side note, more information about the certificate (issue and
+> expiration time) could be useful for auditing. It would be useful too if
+> the server could log it (aside from CA, certificate serial, etc), but
+> couldn't find any option either.
+
+The identifier can be overloaded to have arbitrary information shown in
+the audit log. I can't recall if you need to set LogLevel to something
+above INFO.
+
