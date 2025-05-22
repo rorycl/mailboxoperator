@@ -1,15 +1,190 @@
 package main
 
+// This implementation of an mbox parser searches for "postmark" lines
+// separating RFC 2822 format messages, as set out in `man mbox`.
+//
+//     A postmark line consists of the four characters "From", followed
+//     by a space character, followed by the message's envelope sender
+//     address, followed by whitespace, and followed by a time stamp.
+//     This line is often called From_ line.
+//
+//     The sender address is expected to be addr-spec as defined in
+//     RFC2822 3.4.1. The date is expected to be date-time as output by
+//     asctime(3).  For compatibility reasons with legacy software,
+//     two-digit years greater than or equal to 70 should be interpreted
+//     as the years 1970+, while two-digit years less than 70 should be
+//     interpreted as the years 2000-2069. Software reading files in
+//     this format should also be prepared to accept non-numeric
+//     timezone information such as "CET DST" for Central European Time,
+//     daylight saving time.
+//
+//     Example:
+//
+//       From example@example.com Fri Jun 23 02:56:55 2000
+//
+// To differentiate between lines that look like "From_" separator lines
+// and similarly structured content in emails, the program ensures that
+// each  postmark line is either preceeded by no lines or an empty line,
+// and is followed by either an email header line or (as a special case)
+// a ">From" header added from broken older mailing list software.
+
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"io"
 	"os"
 	"regexp"
 )
 
-type MboxEmail struct {
-	start, end int
+// postMarkRegexp marks the absolute essentials of a "postmark" line
+// defining the start of a email entry in a mailbox (irrespective of the
+// type of mailbox such as mboxo, mboxcl etc.).
+//
+//	From jane@example.com Wed Oct 5 01:06:54 2000
+//
+// grepmail uses https://metacpan.org/pod/Mail::Mbox::MessageParser,
+// which has an mbox message "start" pattern defined (in perl) as
+//
+//	'from_pattern' => q/(?mx)^
+//	 (From\s
+//	   # Skip names, months, days
+//	   (?> [^:\n]+ )
+//	   # Match time
+//	   (?: :\d\d){1,2}
+//	   # Match time zone (EST), hour shift (+0500), and-or year
+//	   (?: \s+ (?: [A-Z]{2,6} | [+-]?\d{4} ) ){1,3}
+//	   # smail compatibility
+//	   (\sremote\sfrom\s.*)?
+//	 )/,
+//
+// This is a simplified version of that pattern, where nsl means
+// "non-space letter":
+//
+//		^From\s        : starting "From "
+//		([^ ]+@[^ ]+)  : (email) more than 0 nsl, @, more than 0 nsl, space
+//	 .*             : filler
+//		(:\d\d{1,2})   : (time) one or two :nn time fields
+//		.*             : filler
+//		([A-Z]{2,6}|
+//			  \d{2,4}) : time zone, hour shift or year
+var postMarkRegexp *regexp.Regexp = regexp.MustCompile(
+	`^From\s([^ ]+@[^ ]+).*(:\d\d){1,2}.*([A-Z]{2,6}|\d{2,4})`,
+)
+
+// emailHeaderLineRegexp is a regexp matching a key: value email header line
+// or ">From" line from older mailing programs (eg sourceforge). In the
+// program it checks that the postmark (not a run-on line) which is define
+var emailHeaderLineRegexp *regexp.Regexp = regexp.MustCompile(
+	`^([A-Za-z-]+: [^ ]+|>From.*:.*[0-9]{2,4})`,
+)
+
+// fileOffsets are pairs of start/end file byte markers
+type fileOffsets struct {
+	start, end int64
+}
+
+// MboxReader provides a reader for sequentially reading emails from an mbox as
+// described by `man mbox` on most unix/linux systems. Emails are
+// differentiated by "postmark" lines starting either at the beginning of the
+// file or prefixed by an empty line, and followed by either a valid email
+// header line or (as a special case) a ">From" line.
+//
+// MboxReader provides a NextMessage method to progressively provide
+// messages. This is fed by by the scan private method.
+//
+// Private fields keep track of the previous line (if any) to a postmark
+// line is the expected null line and if the following line is in an
+// expected email header format, to try and avoid specious postmark
+// matches in email bodies. To assist with this (and debugging) a slice
+// of fileOffsets is held.
+type MboxReader struct {
+	file             *os.File
+	scanner          *bufio.Scanner
+	start, end       int64 // start and end positions in the file
+	counter          int64
+	lastLine         []byte
+	justInserted     bool
+	offsets          []fileOffsets
+	atEOF            bool
+	msgStart, msgEnd int64 // start and end positions of last message in file
+	total            int
+}
+
+// NewMboxReader creates a new MboxReader.
+func NewMboxReader(file *os.File) *MboxReader {
+	scanner := bufio.NewScanner(file)
+	scanner.Split(lineSplitter)
+	mr := &MboxReader{
+		file:     file,
+		scanner:  scanner,
+		lastLine: []byte{},
+		offsets:  []fileOffsets{},
+	}
+	return mr
+}
+
+// NextMessage progressively provides the next email (as an io.Reader)
+// in an mbox until io.EOF. Note that the io.Reader may have valid
+// contents if the error is io.EOF.
+func (mr *MboxReader) NextMessage() (io.Reader, error) {
+	_ = mr.scan()
+	pos := mr.msgEnd - mr.msgStart
+	var err error
+	if mr.atEOF {
+		err = io.EOF
+	}
+	mr.total++
+	return io.NewSectionReader(mr.file, mr.msgStart, pos), err
+}
+
+// scan scans an mbox mailbox to retrieve the stand and end file offsets
+// of emails in the mailbox. The scan function keeps track of the line
+// preceeding a postmark line and check the line after it is a valid
+// header.
+func (mr *MboxReader) scan() bool {
+
+	// setFilePositions sets the msgStart and msgEnd to the last message
+	// offsets.
+	setFilePositions := func() {
+		lastOffset := mr.offsets[len(mr.offsets)-1]
+		mr.msgStart, mr.msgEnd = lastOffset.start, lastOffset.end
+	}
+
+	for mr.scanner.Scan() {
+		by := mr.scanner.Bytes()
+		previousCounter := mr.counter
+		mr.counter += int64(len(by))
+
+		// If an offsets entry has been made for the previous line,
+		// ensure that this line is an email header line (key: value) or
+		// a ">From" line (for older mbox formats), else undo the
+		// last insert into allOffsets.
+		if mr.justInserted {
+			mr.justInserted = false
+			if !emailHeaderLineRegexp.Match(by) {
+				mr.offsets = mr.offsets[:len(mr.offsets)-1]
+			} else {
+				setFilePositions()
+				return true
+			}
+		}
+
+		// if the line starts with from and the last line is null and it
+		// meets the (rough) postmarkregex.
+		if postMarkRegexp.Match(by) && lineIsNull(mr.lastLine) {
+			if previousCounter > 0 {
+				mr.offsets = append(mr.offsets, fileOffsets{mr.start, previousCounter})
+				mr.justInserted = true
+			}
+			mr.start = previousCounter
+		}
+		copy(mr.lastLine, by)
+	}
+	mr.offsets = append(mr.offsets, fileOffsets{mr.start, mr.counter})
+	setFilePositions()
+
+	mr.atEOF = true
+	return false
 }
 
 // lineSplitter is a bufio.Split function which is like bufio.SplitLines
@@ -30,99 +205,9 @@ func lineSplitter(data []byte, atEOF bool) (advance int, token []byte, err error
 	return 0, nil, nil
 }
 
-func lastLineIsNull(b []byte) bool {
+// lineIsNull checks if a line can be considered a "null line" for mbox
+// parsing purposes.
+func lineIsNull(b []byte) bool {
 	b = bytes.Trim(b, "\r\n ")
 	return len(b) == 0
-}
-
-// postMarkRegex marks the
-//
-//	jane@example.com Wed Oct 5 01:06:54 2000
-var postMarkRegex *regexp.Regexp = regexp.MustCompile(`^From\s([^ ]+@[^ ]+) (.*\d{2,4})`)
-
-// email header line (not a run-on line)
-var emailHeaderLine *regexp.Regexp = regexp.MustCompile(`^([A-Za-z-]+: [^ ]+|>From.*:.*[0-9]{2,4})`)
-
-func scan(filer *os.File) {
-	scanner := bufio.NewScanner(filer)
-	scanner.Split(lineSplitter)
-
-	counter, start := 0, 0
-	lastLine := []byte{}
-	justInserted := false
-
-	for scanner.Scan() {
-		by := scanner.Bytes()
-		previousCounter := counter
-		counter += len(by)
-
-		// If an allOffSets entry has been made for the previous line,
-		// ensure that this line is an email header line (key: value) or
-		// a ">From" line (for older mbox formats), else undo the
-		// last insert into allOffsets.
-		if justInserted {
-			if !emailHeaderLine.Match(by) {
-				allOffSets = allOffSets[:len(allOffSets)-1]
-			}
-			justInserted = false
-		}
-
-		// if the line starts with from and the last line is null and it
-		// meets the (rough) postmarkregex.
-		fmt.Print(string(lastLine))
-		if postMarkRegex.Match(by) && lastLineIsNull(lastLine) {
-			if previousCounter > 0 {
-				allOffSets = append(allOffSets, MboxEmail{start, previousCounter})
-				justInserted = true
-			}
-			start = previousCounter
-		}
-		copy(lastLine, by)
-	}
-	allOffSets = append(allOffSets, MboxEmail{start, counter})
-	fmt.Println(counter)
-}
-
-var allOffSets []MboxEmail = []MboxEmail{}
-
-func sliceFile(f *os.File, s, e int64) error {
-	_, err := f.Seek(s, 0)
-	if err != nil {
-		return fmt.Errorf("seek err %s", err)
-	}
-	contents := make([]byte, e-s)
-	_, err = f.Read(contents)
-	if err != nil {
-		return fmt.Errorf("read err %s", err)
-	}
-	o, err := os.Create("/tmp/sliced.eml")
-	if err != nil {
-		return fmt.Errorf("create err %s", err)
-	}
-	defer o.Close()
-	_, err = o.Write(contents)
-	if err != nil {
-		return fmt.Errorf("create err %s", err)
-	}
-	return nil
-}
-
-func main() {
-	filer, err := os.Open("/tmp/netatalk")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	scan(filer)
-	/*
-		for i, v := range allOffSets {
-			fmt.Println(i, v.start, v.end)
-		}
-	*/
-
-	// grab second last
-	lastEmail := allOffSets[0]
-	sliceFile(filer, int64(lastEmail.start), int64(lastEmail.end))
-	fmt.Println(len(allOffSets))
 }
