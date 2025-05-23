@@ -90,21 +90,10 @@ type fileOffsets struct {
 	start, end int64
 }
 
-// MboxReader provides a reader for sequentially reading emails from an mbox as
-// described by `man mbox` on most unix/linux systems. Emails are
-// differentiated by "postmark" lines starting either at the beginning of the
-// file or prefixed by an empty line, and followed by either a valid email
-// header line or (as a special case) a ">From" line.
-//
-// MboxReader provides a NextMessage method to progressively provide
-// messages. This is fed by by the scan private method.
-//
-// Private fields keep track of the previous line (if any) to a postmark
-// line is the expected null line and if the following line is in an
-// expected email header format, to try and avoid specious postmark
-// matches in email bodies. To assist with this (and debugging) a slice
-// of fileOffsets is held in the MboxReader struct.
-type MboxReader struct {
+// MboxFileReader reads emails from an mbox file. This mode of reading
+// requires seeking and is an efficient way of reading bytes from a
+// large, uncompressed, mbox file.
+type MboxFileReader struct {
 	file             *os.File
 	scanner          *bufio.Scanner
 	start, end       int64 // start and end positions in the file
@@ -117,11 +106,11 @@ type MboxReader struct {
 	total            int
 }
 
-// NewMboxReader creates a new MboxReader.
-func NewMboxReader(file *os.File) *MboxReader {
+// NewMboxFileReader creates a new MboxFileReader.
+func NewMboxFileReader(file *os.File) *MboxFileReader {
 	scanner := bufio.NewScanner(file)
 	scanner.Split(lineSplitter)
-	mr := &MboxReader{
+	mr := &MboxFileReader{
 		file:     file,
 		scanner:  scanner,
 		lastLine: []byte{},
@@ -133,7 +122,7 @@ func NewMboxReader(file *os.File) *MboxReader {
 // NextMessage progressively provides the next email (as an io.Reader)
 // in an mbox until io.EOF. Note that the io.Reader may have valid
 // contents if the error is io.EOF.
-func (mr *MboxReader) NextMessage() (io.Reader, error) {
+func (mr *MboxFileReader) NextMessage() (io.Reader, error) {
 	_ = mr.scan()
 	pos := mr.msgEnd - mr.msgStart
 	var err error
@@ -149,7 +138,7 @@ func (mr *MboxReader) NextMessage() (io.Reader, error) {
 // preceeding a postmark line and check the line after it is a valid
 // header, to help differentiate from postmark lines in the body of
 // emails.
-func (mr *MboxReader) scan() bool {
+func (mr *MboxFileReader) scan() bool {
 
 	// setFilePositions sets the msgStart and msgEnd to the last message
 	// offsets.
@@ -191,6 +180,106 @@ func (mr *MboxReader) scan() bool {
 	mr.offsets = append(mr.offsets, fileOffsets{mr.start, mr.counter})
 	setFilePositions()
 
+	mr.atEOF = true
+	return false
+}
+
+// MboxIOReader reads reads emails from an mbox io.reader. This mode of
+// reading supports reading from streams, but has to buffer the results
+// in order to provide complete emails.
+type MboxIOReader struct {
+	reader       io.Reader
+	buf          *bytes.Buffer
+	tmp          *bytes.Buffer // temporary line buffer
+	scanner      *bufio.Scanner
+	lastLine     []byte
+	justInserted bool
+	atEOF        bool
+	total        int
+}
+
+// NewMboxIOReader creates an MboxIOReader from an io.Reader.
+func NewMboxIOReader(r io.Reader) *MboxIOReader {
+	scanner := bufio.NewScanner(r)
+	scanner.Split(lineSplitter)
+	mr := &MboxIOReader{
+		reader:   r,
+		buf:      bytes.NewBuffer(nil),
+		tmp:      bytes.NewBuffer(nil),
+		scanner:  scanner,
+		lastLine: []byte{},
+	}
+	return mr
+}
+
+// NextMessage progressively provides the next email (as an io.Reader)
+// in an mbox until io.EOF. Note that the io.Reader may have valid
+// contents if the error is io.EOF.
+func (mr *MboxIOReader) NextMessage() (io.Reader, error) {
+	_ = mr.scan()
+	var err error
+	if mr.atEOF {
+		err = io.EOF
+	}
+	mr.total++
+	return mr.buf, err
+}
+
+// scan scans an mbox mailbox to retrieve each email in the mailbox in
+// bytes. The scan function keeps track of the line preceeding a
+// postmark line and check the line after it is a valid header, to help
+// differentiate from postmark lines in the body of emails.
+func (mr *MboxIOReader) scan() bool {
+
+	mr.buf = bytes.NewBuffer(nil)
+
+	loadBufFromTmp := func() {
+		_, _ = mr.buf.Write(mr.tmp.Bytes())
+		mr.tmp = bytes.NewBuffer(nil)
+	}
+
+	// If mr.tmp holds data, add the data to mr.buf and empty mr.tmp.
+	if mr.tmp.Len() > 0 {
+		loadBufFromTmp()
+	}
+
+	for mr.scanner.Scan() {
+		by := mr.scanner.Bytes()
+
+		// If an offsets entry has been made for the previous line,
+		// ensure that this line is an email header line (key: value) or
+		// a ">From" line (for older mbox formats), else do not start a
+		// new email.
+		if mr.justInserted {
+			mr.justInserted = false
+			_, _ = mr.tmp.Write(by)
+
+			// If the last line was not a valid postmark line, put the
+			// tmp buffer onto the main buf and continue
+			if !emailHeaderLineRegexp.Match(by) {
+				loadBufFromTmp()
+				continue
+			} else {
+				return true
+			}
+		}
+
+		// If the line starts with from and the last line is null and it
+		// meets the (rough) postmarkregex and there is already data
+		// written in mr.buf, start writing to the tmp line holder to
+		// check for a valid header line on the next loop.
+		if postMarkRegexp.Match(by) && lineIsNull(mr.lastLine) && mr.buf.Len() > 0 {
+			mr.justInserted = true
+			_, _ = mr.tmp.Write(by)
+			continue
+		}
+
+		// add the line to the buffer
+		_, _ = mr.buf.Write(by)
+		copy(mr.lastLine, by)
+	}
+
+	loadBufFromTmp()
 	mr.atEOF = true
 	return false
 }

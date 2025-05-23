@@ -31,8 +31,12 @@ func sliceFile(f *os.File, s, e int64, outPath string) error {
 	return nil
 }
 
+type mboxReader interface {
+	NextMessage() (io.Reader, error)
+}
+
 // drain drains a MboxReader
-func drain(mr *MboxReader, t *testing.T) (counter int) {
+func drain(mr mboxReader, t *testing.T) (counter int) {
 	var atEOF bool
 	for {
 		r, err := mr.NextMessage()
@@ -55,7 +59,7 @@ func drain(mr *MboxReader, t *testing.T) (counter int) {
 }
 
 // mailExtractor extracts an email from an mbox
-func mailExtractor(mr *MboxReader, emailNo int, t *testing.T) []byte {
+func mailExtractor(mr mboxReader, emailNo int, t *testing.T) []byte {
 	var atEOF bool
 	counter := 0
 	for {
@@ -82,7 +86,7 @@ func mailExtractor(mr *MboxReader, emailNo int, t *testing.T) []byte {
 	return nil
 }
 
-func TestParserMailARC(t *testing.T) {
+func TestFileParserMailARC(t *testing.T) {
 	tests := []struct {
 		file string
 		no   int
@@ -111,7 +115,7 @@ func TestParserMailARC(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			mr := NewMboxReader(filer)
+			mr := NewMboxFileReader(filer)
 			counter := drain(mr, t)
 			if got, want := counter, tt.no; got != want {
 				t.Errorf("got %d want %d emails", got, want)
@@ -121,7 +125,7 @@ func TestParserMailARC(t *testing.T) {
 	}
 }
 
-func TestExtractEmail(t *testing.T) {
+func TestFileParserExtractEmail(t *testing.T) {
 	tests := []struct {
 		file      string
 		emailNo   int
@@ -142,7 +146,7 @@ func TestExtractEmail(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			mr := NewMboxReader(filer)
+			mr := NewMboxFileReader(filer)
 			contents := mailExtractor(mr, tt.emailNo, t)
 			firstLine, _, found := bytes.Cut(contents, []byte(string("\n")))
 			if !found {
@@ -155,6 +159,45 @@ func TestExtractEmail(t *testing.T) {
 				// os.WriteFile("/tmp/tmp.mbox", contents, 0644)
 				t.Errorf("got %d want %d bytes for email %d", got, want, tt.emailNo)
 			}
+		})
+	}
+}
+
+func TestIOParserMailARC(t *testing.T) {
+	tests := []struct {
+		file string
+		no   int
+	}{
+		{
+			file: "testdata/mailarc-1.txt",
+			no:   16,
+		},
+		{
+			file: "testdata/mailarc-2.txt",
+			no:   5,
+		},
+		{
+			file: "testdata/mailarc-3.txt",
+			no:   17,
+		},
+		{
+			file: "testdata/mailarc-1-dos.txt", // dos
+			no:   16,
+		},
+	}
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("test_%d", i), func(t *testing.T) {
+			filer, err := os.Open(tt.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mr := NewMboxIOReader(filer)
+			counter := drain(mr, t)
+			if got, want := counter, tt.no; got != want {
+				t.Errorf("got %d want %d emails", got, want)
+			}
+
 		})
 	}
 }
