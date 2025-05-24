@@ -96,7 +96,7 @@ type fileOffsets struct {
 type MboxFileReader struct {
 	file             *os.File
 	scanner          *bufio.Scanner
-	start, end       int64 // start and end positions in the file
+	start            int64 // start position in the file
 	counter          int64
 	lastLine         []byte
 	justInserted     bool

@@ -8,29 +8,6 @@ import (
 	"testing"
 )
 
-// sliceFile is a helper func for writing part of a file to outPath.
-func sliceFile(f *os.File, s, e int64, outPath string) error {
-	_, err := f.Seek(s, 0)
-	if err != nil {
-		return fmt.Errorf("seek err %s", err)
-	}
-	contents := make([]byte, e-s)
-	_, err = f.Read(contents)
-	if err != nil {
-		return fmt.Errorf("read err %s", err)
-	}
-	o, err := os.Create(outPath)
-	if err != nil {
-		return fmt.Errorf("create err %s", err)
-	}
-	defer o.Close()
-	_, err = o.Write(contents)
-	if err != nil {
-		return fmt.Errorf("create err %s", err)
-	}
-	return nil
-}
-
 type mboxReader interface {
 	NextMessage() (io.Reader, error)
 }
@@ -201,3 +178,28 @@ func TestIOParserMailARC(t *testing.T) {
 		})
 	}
 }
+
+/*
+// sliceFile is a helper func for writing part of a file to outPath.
+func sliceFile(f *os.File, s, e int64, outPath string) error {
+	_, err := f.Seek(s, 0)
+	if err != nil {
+		return fmt.Errorf("seek err %s", err)
+	}
+	contents := make([]byte, e-s)
+	_, err = f.Read(contents)
+	if err != nil {
+		return fmt.Errorf("read err %s", err)
+	}
+	o, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("create err %s", err)
+	}
+	defer o.Close()
+	_, err = o.Write(contents)
+	if err != nil {
+		return fmt.Errorf("create err %s", err)
+	}
+	return nil
+}
+*/

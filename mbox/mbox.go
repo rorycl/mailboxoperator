@@ -7,9 +7,8 @@ import (
 	"os"
 
 	"github.com/rorycl/mailboxoperator/mailfile"
+	mbox "github.com/rorycl/mailboxoperator/mbox/parser"
 	"github.com/rorycl/mailboxoperator/uncompress"
-
-	mbox "github.com/ProtonMail/go-mbox"
 )
 
 // Mbox represents an mbox file on disk with related go-mbox reader and
@@ -18,7 +17,8 @@ type Mbox struct {
 	Path    string
 	current int // current message being read
 	file    *os.File
-	reader  *mbox.Reader
+	reader  *mbox.MboxIOReader
+	atEOF   bool
 }
 
 // NewMbox sets up a new mbox for reading
@@ -41,12 +41,16 @@ func NewMbox(path string) (*Mbox, error) {
 		return &m, fmt.Errorf("uncompress error: %w", err)
 	}
 
-	m.reader = mbox.NewReader(u)
+	m.reader = mbox.NewMboxIOReader(u)
 	return &m, err
 }
 
-// NextReader returns the next Mail from the reader until exhausted
+// NextReader returns the next Mail from the reader until exhausted. An
+// io.EOF encountered is deferred until the the next call to NextReader.
 func (m *Mbox) NextReader() (*mailfile.MailFile, io.Reader, error) {
+	if m.atEOF {
+		return nil, nil, io.EOF
+	}
 	m.current++
 	thisMail := mailfile.MailFile{
 		Kind: "mbox",
@@ -55,7 +59,9 @@ func (m *Mbox) NextReader() (*mailfile.MailFile, io.Reader, error) {
 	}
 	reader, err := m.reader.NextMessage()
 	if err != nil && err == io.EOF {
-		m.file.Close()
+		m.atEOF = true
+		_ = m.file.Close()
+		return &thisMail, reader, nil
 	}
 	return &thisMail, reader, err
 }

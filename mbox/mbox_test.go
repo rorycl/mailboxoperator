@@ -21,24 +21,24 @@ func TestMbox(t *testing.T) {
 		}
 
 		counter := 0
-		firstFourLines := ""
+		firstFiveLines := ""
 		for {
 			m, r, err := md.NextReader()
 			if err != nil && err == io.EOF {
 				break
 			}
-			if err != nil {
+			if err != nil && err != io.EOF {
 				t.Fatal(err)
 			}
 			counter++
-			firstFourLines = m.Path + "\n"
+			firstFiveLines = m.Path + "\n"
 			b := bufio.NewReader(r)
-			for i := 0; i < 4; i++ {
+			for i := 0; i < 5; i++ {
 				line, _, err := b.ReadLine()
 				if err != nil {
 					t.Fatal(err)
 				}
-				firstFourLines += string(line) + "\n"
+				firstFiveLines += string(line) + "\n"
 			}
 		}
 
@@ -49,13 +49,14 @@ func TestMbox(t *testing.T) {
 		// check contents of last file
 		lastFileHeader := fmt.Sprintf(`
 %s
+From golang-nuts+bncBAABB5477SUAMGQE2GXYLLA@googlegroups.com Thu Oct  5 20:35:22 2023
 Return-path: <golang-nuts+bncBAABB5477SUAMGQE2GXYLLA@googlegroups.com>
 Envelope-to: example@test.com
 Delivery-date: Thu, 05 Oct 2023 19:35:22 +0000
 Received: from mail-oo1-f59.google.com ([209.85.161.59])`, mailbox)
 
-		if got, want := strings.TrimSpace(firstFourLines), strings.TrimSpace(lastFileHeader); got != want {
-			t.Errorf("last file header error got\n%s\nwant\n%s", got, want)
+		if got, want := strings.TrimSpace(firstFiveLines), strings.TrimSpace(lastFileHeader); got != want {
+			t.Errorf("last file header error\ngot\n%s\nwant\n%s", got, want)
 		}
 	}
 }
