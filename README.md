@@ -10,9 +10,11 @@ An example cli client that uses MailboxOperator is [mailfinder](https://github.c
 
 The package reads the provided mailboxes concurrently, and provides
 `WorkersNum` worker goroutines to run the `Operator` function. Shared
-resources used by the Operator should be safe for concurrent use. An
-error from any one call to the Operator will shut down both the workers
-and mailbox producer goroutines and return the first error.
+resources used by the Operator should be safe for concurrent use.
+
+Error management from errors arising from normal operation (for example,
+an email header that cannot be parsed) is provided by a simple error
+wrapper.
 
 Reading xz, gz and bz2 compressed mbox files is supported transparently.
 
@@ -29,14 +31,14 @@ patches or suggestions.
 ## Example
 
 ```golang
-package mailboxoperator
-
 import (
 	"fmt"
 	"io"
 	"log"
 	"net/mail"
 	"sync"
+
+	mbo "github.com/rorycl/mailboxoperator"
 )
 
 // counter is a simple struct with mutex protected int
@@ -47,7 +49,7 @@ type Counter struct {
 
 // Operate fulfils the mailboxoperator.Operator interface requirement to
 // operate on an email. In this case it is using net/mail.ReadMessage,
-// but another useful module is github.com/rorycl/letters. Mailboxes are
+// but another useful module is github.com/mnako/letters. Mailboxes are
 // processed concurrently using NumWorkers worker goroutines.
 func (c *Counter) Operate(r io.Reader) error {
 	_, err := mail.ReadMessage(r)
@@ -67,8 +69,11 @@ func Example() {
 	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
 	maildirs := []string{"maildir/testdata/example/"}
 
+	// choose an error handler (this one fails on first error)
+	eof := mbo.OpErrFatalHandler
+
 	// init operator with mailboxes and counter
-	mo, err := NewMailboxOperator(mboxes, maildirs, &c)
+	mo, err := mbo.NewMailboxOperator(mboxes, maildirs, &c, eof)
 	if err != nil {
 		log.Fatal(err)
 	}
