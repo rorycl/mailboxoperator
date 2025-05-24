@@ -27,13 +27,15 @@ func (c *counter) Operate(r io.Reader) error {
 	return nil
 }
 
+var oeh OperatorErrorHandler = OpErrFatalHandler
+
 func TestProcessSimple(t *testing.T) {
 	c := counter{}
 
 	maildirs := []string{"maildir/testdata/example/"}
 	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
 
-	mo, err := NewMailboxOperator(mboxes, maildirs, &c)
+	mo, err := NewMailboxOperator(mboxes, maildirs, &c, oeh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +69,7 @@ func TestProcessSimpleErr(t *testing.T) {
 	maildirs := []string{"maildir/testdata/example/"}
 	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
 
-	mo, err := NewMailboxOperator(mboxes, maildirs, &s)
+	mo, err := NewMailboxOperator(mboxes, maildirs, &s, oeh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,22 +77,21 @@ func TestProcessSimpleErr(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected charset error")
 	}
-	var oe OperationError
+	var oe *OperationError
 	if !errors.As(err, &oe) {
 		t.Fatalf("expected OperationError, got %T for %s", err, err)
 	}
-	errReturned := err.(OperationError)
-	if got, want := errReturned.Kind, "maildir"; got != want {
+	if got, want := oe.Kind, "maildir"; got != want {
 		t.Errorf("OperationError kind got %s want %s", got, want)
 	}
-	if got, want := errReturned.Offset, 3; got != want {
+	if got, want := oe.Offset, 3; got != want {
 		t.Errorf("OperationError offset got %d want %d", got, want)
 	}
-	if got, want := errReturned.Err.Error(), `charset not supported: "koi8-r"`; got != want {
+	if got, want := oe.Err.Error(), `charset not supported: "koi8-r"`; got != want {
 		t.Errorf("OperationError err descriptor got %s want %s", got, want)
 	}
 
-	if got, want := err.Error(), `maildir path maildir/testdata/example/cur/1735238277.2023287_9.example_2_s offset 3 error: charset not supported: "koi8-r"`; got != want {
+	if got, want := err.Error(), `maildir path:maildir/testdata/example/cur/1735238277.2023287_9.example_2_s offset:3 error: charset not supported: "koi8-r"`; got != want {
 		t.Errorf("Error string\ngot  %s\nwant %s", got, want)
 	}
 	// fmt.Printf("%#v\n", errReturned)
@@ -131,7 +132,7 @@ func TestProcessNames(t *testing.T) {
 	maildirs := []string{"maildir/testdata/example/"}
 	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
 
-	mo, err := NewMailboxOperator(mboxes, maildirs, &f)
+	mo, err := NewMailboxOperator(mboxes, maildirs, &f, oeh)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,11 +160,11 @@ func (s *ss) Operate(r io.Reader) error {
 
 func TestNewMailboxOperator(t *testing.T) {
 	s := ss{}
-	_, err := NewMailboxOperator(nil, nil, &s)
+	_, err := NewMailboxOperator(nil, nil, &s, oeh)
 	if err == nil {
 		t.Fatal("expected empty mailboxes error", err)
 	}
-	_, err = NewMailboxOperator([]string{"abc"}, []string{"def"}, nil)
+	_, err = NewMailboxOperator([]string{"abc"}, []string{"def"}, nil, oeh)
 	if err == nil {
 		t.Fatal("expected nil operator error", err)
 	}

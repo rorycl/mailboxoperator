@@ -29,14 +29,15 @@ var (
 // MailboxOperator is a struct setting out the mailboxes to be processed
 // with `Operator`.
 type MailboxOperator struct {
-	mboxes   []string
-	maildirs []string
-	operator Operator
+	mboxes    []string
+	maildirs  []string
+	operator  Operator
+	opErrFunc func(error) error
 }
 
 // NewMailboxOperator creates a new MailboxOperator with the provided
 // one or more mbox format files or maildir directories.
-func NewMailboxOperator(mboxes []string, maildirs []string, operator Operator) (*MailboxOperator, error) {
+func NewMailboxOperator(mboxes []string, maildirs []string, operator Operator, oeh OperatorErrorHandler) (*MailboxOperator, error) {
 	if len(mboxes)+len(maildirs) < 1 {
 		return nil, errors.New("no mailboxes or maildirs provided")
 	}
@@ -44,9 +45,10 @@ func NewMailboxOperator(mboxes []string, maildirs []string, operator Operator) (
 		return nil, errors.New("nil operator provided")
 	}
 	return &MailboxOperator{
-		mboxes:   mboxes,
-		maildirs: maildirs,
-		operator: operator,
+		mboxes:    mboxes,
+		maildirs:  maildirs,
+		operator:  operator,
+		opErrFunc: oeh,
 	}, nil
 }
 
@@ -55,11 +57,7 @@ func NewMailboxOperator(mboxes []string, maildirs []string, operator Operator) (
 // processed concurrently and the `Operator` function run by
 // `WorkersNum` goroutines.
 func (m *MailboxOperator) Operate() error {
-	err := m.process()
-	if err != nil {
-		return err
-	}
-	return nil
+	return m.process()
 }
 
 // OperationError is a decorated error describing the mbox/maildir file
@@ -71,8 +69,8 @@ type OperationError struct {
 	Err    error
 }
 
-func (o OperationError) Error() string {
-	return fmt.Sprintf("%s path %s offset %d error: %s", o.Kind, o.Path, o.Offset, o.Err.Error())
+func (o *OperationError) Error() string {
+	return fmt.Sprintf("%s path:%s offset:%d error: %s", o.Kind, o.Path, o.Offset, o.Err.Error())
 }
 
 // mailBytesId passes mail data from the reader to the worker
@@ -90,13 +88,12 @@ func (m *MailboxOperator) workers(reader <-chan mailBytesId) <-chan error {
 	for w := 0; w < WorkersNum; w++ {
 		g.Go(func() error {
 			for mbi := range reader {
-
 				// run the operator
 				err := m.operator.Operate(mbi.buf)
 				if err != nil {
-					thisErr := OperationError{mbi.m.Kind, mbi.m.Path, mbi.m.No, err}
+					thisErr := &OperationError{mbi.m.Kind, mbi.m.Path, mbi.m.No, err}
 					workerErrChan <- thisErr
-					return thisErr
+					// don't error; defer to
 				}
 			}
 			return nil
@@ -143,22 +140,22 @@ func (m *MailboxOperator) process() error {
 	// Read each mbox/maildir in a separate goroutine, exiting on first
 	// error. Errors from workers are signalled on the workerErrChan,
 	// with the first worker error being reported after which the
-	// workerErrChan is closed, causing other produer goroutines to
+	// workerErrChan is closed, causing other producer goroutines to
 	// exit.
 	g := new(errgroup.Group)
-	for ii, mm := range allMboxesAndMailDirs {
+	for i, mm := range allMboxesAndMailDirs {
 		g.Go(func() error {
-			i := ii
-			m := mm
 			for {
 				// check for error or closed worker chan, exiting in
 				// either case
 				select {
 				case err, ok := <-workerErrChan:
 					if err != nil {
-						fmt.Println("error", err)
-						// return err
-						return nil
+						// wrap error with the customised error func,
+						// which may return nil or an err
+						if err2 := m.opErrFunc(err); err2 != nil {
+							return err2
+						}
 					}
 					if !ok {
 						return nil
@@ -166,7 +163,7 @@ func (m *MailboxOperator) process() error {
 				default:
 				}
 
-				n, r, err := m.NextReader()
+				n, r, err := mm.NextReader()
 				if err != nil && err == io.EOF {
 					break
 				}
