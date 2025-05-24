@@ -35,11 +35,14 @@ func Example() {
 	c := Counter{}
 
 	// use mailboxes in submodule testdata
-	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"} // 2 msgs + 1 msg
-	maildirs := []string{"maildir/testdata/example/"}                            // 6 msgs
+	mboxes := []string{"mbox/testdata/golang.mbox", "mbox/testdata/gonuts.mbox"}
+	maildirs := []string{"maildir/testdata/example/"}
+
+	// choose an error handler (this one fails on first error)
+	eof := mbo.OpErrFatalHandler
 
 	// init operator with mailboxes and counter
-	mo, err := mbo.NewMailboxOperator(mboxes, maildirs, &c)
+	mo, err := mbo.NewMailboxOperator(mboxes, maildirs, &c, eof)
 	if err != nil {
 		log.Fatal(err)
 	}
