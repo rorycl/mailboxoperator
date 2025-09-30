@@ -40,7 +40,7 @@ func TestMboxWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := file.Name()
-	file.Close()
+	_ = file.Close()
 	_ = os.Remove(f)
 
 	m, err := NewMboxWriter(f)
@@ -95,6 +95,6 @@ func TestFailMboxWriter(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected NewMboxWriter to fail with existing file for %s", file.Name())
 	}
-	file.Close()
+	_ = file.Close()
 	_ = os.Remove(file.Name())
 }

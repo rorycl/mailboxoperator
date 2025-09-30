@@ -96,7 +96,7 @@ In-Reply-To: <Pine.GSO.4.05.10003011417440.7189-100000@shell.clark.net>`
 }
 
 func TestMailDirEmpty(t *testing.T) {
-	if _, err := NewMailDir("testdata/empty"); !errors.Is(err, EmptyMailDir) {
+	if _, err := NewMailDir("testdata/empty"); !errors.Is(err, ErrEmptyMailDir) {
 		t.Fatal("expected empty error")
 	}
 }

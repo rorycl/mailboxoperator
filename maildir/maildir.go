@@ -33,8 +33,8 @@ import (
 // maildir; see https://en.wikipedia.org/wiki/Maildir#Specifications
 var mailDirContents []string = []string{"cur", "new", "tmp"}
 
-// EmptyMailDir is a sentinel error
-var EmptyMailDir error = errors.New("maildir is empty")
+// ErrEmptyMailDir is a sentinel error
+var ErrEmptyMailDir error = errors.New("maildir is empty")
 
 // Maildir represents the outer directory of a set of maildir
 // subdirectories (expected to be mailDirContents) and a listing of the
@@ -58,7 +58,7 @@ func NewMailDir(path string) (*MailDir, error) {
 	m.current = -1
 	err = m.list()
 	if m.TotalEmails() == 0 {
-		return &m, EmptyMailDir
+		return &m, ErrEmptyMailDir
 	}
 	return &m, err
 }

@@ -43,7 +43,9 @@ func TestUncompress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 
 			u, err := newUncompress(f)
 			if err != nil {
@@ -64,7 +66,9 @@ func TestUncompress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() {
+				_ = f.Close()
+			}()
 
 			r, err := NewReader(f)
 			if err != nil {
