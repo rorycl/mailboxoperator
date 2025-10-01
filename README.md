@@ -1,6 +1,6 @@
 # mailboxoperator
 
-version 0.0.6 : 24 May 2025
+version 0.0.7 : 30 September 2025
 
 MailboxOperator is a golang package for reading the emails in mbox and
 maildir format mailboxes and passing each email to a func meeting the
