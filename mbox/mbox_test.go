@@ -33,7 +33,7 @@ func TestMbox(t *testing.T) {
 			counter++
 			firstFiveLines = m.Path + "\n"
 			b := bufio.NewReader(r)
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				line, _, err := b.ReadLine()
 				if err != nil {
 					t.Fatal(err)

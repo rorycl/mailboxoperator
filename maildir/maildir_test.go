@@ -35,12 +35,12 @@ testdata/example/cur/1735238277.2023287_9.example_2_s
 testdata/example/new/1735238277.2023287_1.example
 testdata/example/new/1735238277.2023287_3.example
 `
-	fo := ""
+	var fo strings.Builder
 	for _, f := range md.Contents {
-		fo += f.Path + "\n"
+		fo.WriteString(f.Path + "\n")
 	}
 
-	if got, want := strings.TrimSpace(fo), strings.TrimSpace(files); got != want {
+	if got, want := strings.TrimSpace(fo.String()), strings.TrimSpace(files); got != want {
 		t.Errorf("files error got\n%s\nwant\n%s", got, want)
 	}
 
@@ -73,7 +73,7 @@ testdata/example/new/1735238277.2023287_3.example
 		}
 		firstFourLines = m.Path + "\n"
 		b := bufio.NewReader(r)
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			line, _, err := b.ReadLine()
 			if err != nil {
 				t.Fatal(err)

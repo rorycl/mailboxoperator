@@ -1,5 +1,4 @@
 //go:build failingTests
-// +build failingTests
 
 package mbox
 
